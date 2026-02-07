@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brisbane 7-Day Weather</title>
+    <style>
+        /* --- PAGE LAYOUT --- */
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        /* --- IMAGE STYLING --- */
+        .header-image {
+            width: 1440px;
+            height: auto;
+            display: block;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            object-fit: cover;
+            background-color: #ddd;
+        }
+
+        /* --- WIDGET STYLING --- */
+        .widget-container {
+            background: linear-gradient(135deg, #00B4DB, #0083B0); 
+            color: white;
+            width: 1440px; 
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+
+        /* Top Section: Current Weather */
+        .widget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 30px 50px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .location-info h2 { 
+            margin: 0; 
+            font-size: 2.5rem; 
+            text-transform: uppercase; 
+            letter-spacing: 2px;
+        }
+        
+        /* New style for the description next to city name */
+        .weather-desc {
+            font-weight: normal;
+            opacity: 0.8;
+            font-size: 0.7em; /* Slightly smaller than City Name */
+            text-transform: capitalize;
+            margin-left: 15px;
+        }
+
+        .location-info p { margin: 10px 0 0; opacity: 0.8; font-size: 1.2rem; }
+        
+        .current-temp { font-size: 4rem; font-weight: bold; }
+
+        /* Bottom Section: 7-Day Forecast */
+        .forecast-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px 0;
+            background: rgba(0,0,0,0.1);
+        }
+
+        .day-card {
+            text-align: center;
+            flex: 1; 
+            border-right: 1px solid rgba(255,255,255,0.1);
+            padding: 10px 5px;
+        }
+        .day-card:last-child { border-right: none; }
+
+        .day-name { font-size: 1.1rem; text-transform: uppercase; opacity: 0.9; margin-bottom: 15px; display: block; font-weight: bold;}
+        .day-icon { font-size: 2.5rem; margin: 10px 0; display: block; }
+        .day-temp { font-size: 1.4rem; font-weight: bold; }
+        .day-temp .low { opacity: 0.6; font-size: 1.1rem; margin-left: 8px; }
+
+        .status-msg { padding: 80px; text-align: center; font-size: 1.5rem; color: rgba(255,255,255,0.9); }
+    </style>
+</head>
+<body>
+
+    <img src="2026Horse.jpg" alt="2026 Horse" class="header-image">
+
+    <div class="widget-container" id="weather-widget">
+        <div class="status-msg">Loading Brisbane Weather...</div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const LOCATION = { lat: -27.4705, lon: 153.0260, name: "BRISBANE" };
+
+        // --- HELPER: Get Text Description from Code ---
+        function getWeatherDesc(code) {
+            const codes = {
+                0: "Clear Sky",
+                1: "Mainly Clear", 2: "Partly Cloudy", 3: "Overcast",
+                45: "Fog", 48: "Depositing Rime Fog",
+                51: "Light Drizzle", 53: "Moderate Drizzle", 55: "Dense Drizzle",
+                61: "Slight Rain", 63: "Moderate Rain", 65: "Heavy Rain",
+                80: "Slight Showers", 81: "Moderate Showers", 82: "Violent Showers",
+                95: "Thunderstorm", 96: "Thunderstorm with Hail", 99: "Heavy Hail"
+            };
+            return codes[code] || "Variable Weather";
+        }
+
+        // --- ICONS MAPPING ---
+        function getIcon(code) {
+            if (code === 0) return "☀️"; 
+            if (code >= 1 && code <= 3) return "⛅"; 
+            if (code >= 45 && code <= 48) return "🌫️"; 
+            if (code >= 51 && code <= 67) return "🌧️"; 
+            if (code >= 71 && code <= 77) return "❄️"; 
+            if (code >= 80 && code <= 82) return "🌦️"; 
+            if (code >= 95) return "⛈️"; 
+            return "☁️";
+        }
+
+        function getDayName(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { weekday: 'short' }); 
+        }
+
+        // --- MAIN LOGIC ---
+        window.onload = function() {
+            fetchWeather(LOCATION.lat, LOCATION.lon, LOCATION.name);
+        };
+
+        async function fetchWeather(lat, lon, locationName) {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error("API Error");
+                const data = await response.json();
+                renderWidget(data, locationName);
+            } catch (error) {
+                console.error(error);
+                document.getElementById('weather-widget').innerHTML = 
+                    `<div class="status-msg">Unable to load weather data.</div>`;
+            }
+        }
+
+        function renderWidget(data, locationName) {
+            const current = data.current_weather;
+            const daily = data.daily;
+            
+            // Get text description for current weather
+            const currentDesc = getWeatherDesc(current.weathercode);
+
+            let forecastHTML = '';
+            
+            // Loop for 7 days
+            for(let i = 0; i < 7; i++) {
+                forecastHTML += `
+                    <div class="day-card">
+                        <span class="day-name">${getDayName(daily.time[i])}</span>
+                        <span class="day-icon">${getIcon(daily.weathercode[i])}</span>
+                        <span class="day-temp">
+                            ${Math.round(daily.temperature_2m_max[i])}°
+                            <span class="low">${Math.round(daily.temperature_2m_min[i])}°</span>
+                        </span>
+                    </div>
+                `;
+            }
+
+            const html = `
+                <div class="widget-header">
+                    <div class="location-info">
+                        <h2>
+                            ${locationName} 
+                            <span class="weather-desc">— ${currentDesc}</span>
+                        </h2>
+                        <p>CURRENT WEATHER</p>
+                    </div>
+                    <div class="current-temp">
+                        ${Math.round(current.temperature)}°C
+                    </div>
+                </div>
+                <div class="forecast-row">
+                    ${forecastHTML}
+                </div>
+            `;
+
+            document.getElementById('weather-widget').innerHTML = html;
+        }
+    </script>
+
+</body>
+</html>
